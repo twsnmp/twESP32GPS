@@ -1,0 +1,447 @@
+/* =============================================================================
+   twESP32GPS — Global Styles
+   Ported from twgps style.css with ESP32 dashboard adjustments
+   ============================================================================= */
+
+/* --------------------------------------------------------------------------
+   CSS Custom Variables: Premium Dark / Light Themes
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --bg-gradient:          linear-gradient(135deg, #040814 0%, #0c1428 100%);
+  --navbar-bg:            rgba(6, 12, 28, 0.65);
+  --card-bg:              rgba(12, 22, 45, 0.45);
+  --card-border:          rgba(0, 217, 255, 0.15);
+  --card-border-hover:    rgba(0, 217, 255, 0.35);
+  --text-primary:         #f8fafc;
+  --text-secondary:       #94a3b8;
+  --text-muted:           #64748b;
+  --accent-cyan:          #00d9ff;
+  --accent-emerald:       #10b981;
+  --accent-amber:         #f59e0b;
+  --accent-pink:          #ec4899;
+  --separator-color:      rgba(255, 255, 255, 0.08);
+  --shadow-color:         rgba(0, 0, 0, 0.4);
+  --input-bg:             rgba(2, 6, 18, 0.6);
+  --input-border:         rgba(255, 255, 255, 0.12);
+  --btn-secondary:        rgba(255, 255, 255, 0.08);
+  --btn-secondary-hover:  rgba(255, 255, 255, 0.15);
+  --glass-blur:           blur(20px);
+  --skyplot-bg:           #000814;
+  --skyplot-ring:         rgba(0, 217, 255, 0.15);
+  --skyplot-text:         rgba(148, 163, 184, 0.7);
+}
+
+:root[data-theme="light"] {
+  --bg-gradient:          linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  --navbar-bg:            rgba(255, 255, 255, 0.75);
+  --card-bg:              rgba(255, 255, 255, 0.65);
+  --card-border:          rgba(15, 23, 42, 0.08);
+  --card-border-hover:    rgba(59, 130, 246, 0.25);
+  --text-primary:         #0f172a;
+  --text-secondary:       #475569;
+  --text-muted:           #94a3b8;
+  --accent-cyan:          #0284c7;
+  --accent-emerald:       #059669;
+  --accent-amber:         #d97706;
+  --accent-pink:          #db2777;
+  --separator-color:      rgba(15, 23, 42, 0.06);
+  --shadow-color:         rgba(15, 23, 42, 0.05);
+  --input-bg:             rgba(255, 255, 255, 0.85);
+  --input-border:         rgba(15, 23, 42, 0.12);
+  --btn-secondary:        rgba(15, 23, 42, 0.05);
+  --btn-secondary-hover:  rgba(15, 23, 42, 0.1);
+  --glass-blur:           blur(20px);
+  --skyplot-bg:           #f0f4ff;
+  --skyplot-ring:         rgba(2, 132, 199, 0.15);
+  --skyplot-text:         rgba(71, 85, 105, 0.8);
+}
+
+/* --------------------------------------------------------------------------
+   Reset & Base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+#app { height: 100%; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--separator-color); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* --------------------------------------------------------------------------
+   App Layout
+   -------------------------------------------------------------------------- */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* --------------------------------------------------------------------------
+   Navbar
+   -------------------------------------------------------------------------- */
+.navbar {
+  height: 64px;
+  background: var(--navbar-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  z-index: 10;
+  box-shadow: 0 4px 30px var(--shadow-color);
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+  box-shadow: 0 0 10px var(--accent-cyan);
+}
+
+.logo-area h1 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--card-border);
+  color: var(--accent-cyan);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-cyan);
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* GPS status indicator pill */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.status-indicator.active   { color: var(--accent-emerald); border: 1px solid var(--accent-emerald); }
+.status-indicator.searching{ color: var(--accent-amber);   border: 1px solid var(--accent-amber); }
+
+/* Pulse dot */
+.pulse-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: pulse 1.8s infinite;
+}
+.pulse-dot.large {
+  width: 24px; height: 24px;
+  background-color: var(--accent-cyan);
+  opacity: 0.15;
+  animation: pulseLarge 2s infinite;
+  display: block;
+  margin: 0 auto 16px;
+}
+
+@keyframes pulse {
+  0%   { transform: scale(0.9); opacity: 0.6; }
+  50%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
+}
+@keyframes pulseLarge {
+  0%   { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(0, 217, 255, 0.4); }
+  70%  { transform: scale(1.15); box-shadow: 0 0 0 15px rgba(0, 217, 255, 0); }
+  100% { transform: scale(0.85); box-shadow: 0 0 0 0 rgba(0, 217, 255, 0); }
+}
+
+/* Icon button */
+.icon-btn {
+  background: var(--btn-secondary);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; justify-content: center; align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.icon-btn:hover {
+  background: var(--btn-secondary-hover);
+  border-color: var(--card-border-hover);
+}
+
+/* Language selector */
+.lang-selector { position: relative; display: flex; align-items: center; }
+.lang-select {
+  background: var(--btn-secondary);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  padding: 6px 28px 6px 12px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; outline: none;
+  transition: all 0.2s ease;
+  appearance: none; -webkit-appearance: none;
+}
+.lang-select:hover { background: var(--btn-secondary-hover); border-color: var(--card-border-hover); }
+.lang-selector::after {
+  content: "▾";
+  position: absolute; right: 12px;
+  pointer-events: none;
+  font-size: 12px; color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Main Layout
+   -------------------------------------------------------------------------- */
+.main-content {
+  display: flex;
+  flex: 1;
+  padding: 16px;
+  gap: 16px;
+  overflow: hidden;
+  height: calc(100vh - 64px);
+}
+
+/* --------------------------------------------------------------------------
+   Glass Cards
+   -------------------------------------------------------------------------- */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 32px var(--shadow-color);
+  transition: border-color 0.25s ease;
+}
+.card:hover { border-color: var(--card-border-hover); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.card-icon { width: 20px; height: 20px; }
+.card-icon.cyan    { color: var(--accent-cyan); }
+.card-icon.emerald { color: var(--accent-emerald); }
+.card-icon.amber   { color: var(--accent-amber); }
+.card-icon.pink    { color: var(--accent-pink); }
+.card-header h2 {
+  font-size: 15px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar (Left Panel)
+   -------------------------------------------------------------------------- */
+.sidebar-left {
+  width: 290px;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  padding: 12px; gap: 0;
+}
+.sidebar-left .card-header     { margin-bottom: 8px; gap: 8px; }
+.sidebar-left .card-header h2  { font-size: 13px; }
+.sidebar-left .card-icon       { width: 16px; height: 16px; }
+.sidebar-left .separator       { margin: 10px 0; }
+.sidebar-left .coord-row.mt-4  { margin-top: 0; }
+.sidebar-left .coord-val       { padding: 6px 8px; gap: 2px; }
+.sidebar-left .coord-val .label { font-size: 10px; }
+.sidebar-left .coord-val .value { font-size: 13px; }
+
+/* --------------------------------------------------------------------------
+   Visual Area (Right side: SkyPlot + Satellite Matrix)
+   -------------------------------------------------------------------------- */
+.visual-area {
+  flex: 1;
+  display: flex; flex-direction: column;
+  gap: 16px;
+  overflow: hidden; height: 100%;
+}
+
+.skyplot-section {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 50%;
+  flex-shrink: 0;
+}
+
+.satellites-section {
+  flex: 1;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Coordinate Matrix
+   -------------------------------------------------------------------------- */
+.coord-matrix { display: flex; flex-direction: column; gap: 12px; }
+.coord-row    { display: flex; gap: 12px; }
+.coord-val {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.coord-val .label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.coord-val .value { font-size: 15px; font-weight: 700; font-family: monospace; }
+.mt-4 { margin-top: 4px; }
+
+/* --------------------------------------------------------------------------
+   Separator
+   -------------------------------------------------------------------------- */
+.separator {
+  border: 0; height: 1px;
+  background: var(--separator-color);
+  margin: 18px 0;
+}
+
+/* --------------------------------------------------------------------------
+   NTP Status Panel
+   -------------------------------------------------------------------------- */
+.ntp-panel { display: flex; flex-direction: column; gap: 12px; }
+
+.ntp-status-box {
+  padding: 10px; border-radius: 8px;
+  text-align: center; font-weight: 800; font-size: 14px; letter-spacing: 1px;
+}
+.ntp-status-box.stratum1 {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--accent-emerald);
+  color: var(--accent-emerald);
+}
+.ntp-status-box.no-fix {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+}
+
+.stats-row { display: flex; gap: 10px; }
+.stat-unit {
+  flex: 1; text-align: center;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--separator-color);
+  padding: 8px; border-radius: 8px;
+}
+.stat-label {
+  display: block;
+  font-size: 10px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px;
+}
+.stat-value { font-size: 15px; font-weight: 700; font-family: monospace; }
+
+/* --------------------------------------------------------------------------
+   Network / Info Panel
+   -------------------------------------------------------------------------- */
+.field-info {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  padding: 8px 12px; border-radius: 8px; margin-bottom: 8px;
+}
+.field-info .label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+.field-info .value { font-size: 13px; font-weight: 700; font-family: monospace; color: var(--accent-cyan); }
+
+/* --------------------------------------------------------------------------
+   Satellite Matrix
+   -------------------------------------------------------------------------- */
+.satellites-rows-container {
+  display: flex; flex-direction: column;
+  gap: 8px; overflow-y: auto; flex: 1; padding-right: 4px;
+}
+
+.empty-state {
+  height: 100%; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  text-align: center; color: var(--text-muted); font-size: 13px; padding: 32px;
+}
+
+.constellation-row { display: flex; flex-direction: column; gap: 4px; }
+.constellation-row h3 {
+  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 6px;
+}
+.constellation-row h3 .indicator {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sat-horizontal-list {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+}
+
+/* Satellite card */
+.sat-card {
+  width: 100px; flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--separator-color);
+  padding: 4px 6px; border-radius: 6px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.sat-card.inactive { opacity: 0.5; }
+
+.sat-header { display: flex; justify-content: space-between; font-size: 9.5px; }
+.sat-header .prn { font-weight: 700; color: var(--text-primary); }
+.sat-header .snr-val { font-weight: 600; font-family: monospace; }
+
+.snr-bar-bg {
+  height: 3px; width: 100%;
+  background: var(--separator-color);
+  border-radius: 9px; overflow: hidden;
+}
+.snr-bar-fg { height: 100%; border-radius: 9px; transition: width 0.4s ease; }
+
+.sat-meta {
+  display: flex; justify-content: space-between;
+  font-size: 8px; color: var(--text-muted); font-family: monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Animations
+   -------------------------------------------------------------------------- */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }

@@ -1,0 +1,10 @@
+# OS files
+.DS_Store
+
+# Editor/IDE configs
+.vscode/
+.idea/
+
+# Node/Vite frontend build and dependencies
+frontend/node_modules/
+frontend/dist/

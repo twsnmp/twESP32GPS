@@ -1,0 +1,22 @@
+[tools]
+node = "20"
+
+[tasks.install]
+description = "Install all dependencies (Arduino libs + npm packages)"
+run = "bash scripts/install_libs.sh && cd frontend && npm install"
+
+[tasks.build-frontend]
+description = "Build Svelte frontend with gzip compression → data/"
+run = "bash scripts/build_frontend.sh"
+
+[tasks.build]
+description = "Compile Arduino firmware"
+run = "bash scripts/build_fw.sh"
+
+[tasks.flash]
+description = "Flash firmware + upload LittleFS filesystem"
+run = "bash scripts/flash.sh"
+
+[tasks.all]
+description = "Full build: frontend + firmware"
+depends = ["build-frontend", "build"]
