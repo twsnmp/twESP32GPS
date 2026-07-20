@@ -2,6 +2,7 @@
 #include "config.h"
 #include "dashboard.h"  // Embedded Raw String dashboard HTML
 #include <ArduinoJson.h>
+#include <WiFiManager.h>
 
 // =============================================================================
 //  Constructor / Destructor
@@ -41,6 +42,9 @@ void WebManager::begin(uint16_t port) {
 
   // Route: /api/gps → JSON API (no cache)
   _server->on("/api/gps", HTTP_GET, [this]() { handleApiGps(); });
+
+  // Route: /api/reset-wifi → clear saved WiFi credentials and restart
+  _server->on("/api/reset-wifi", HTTP_POST, [this]() { handleApiResetWifi(); });
 
   // Route: catch-all → 404
   _server->onNotFound([this]() { handleNotFound(); });
@@ -108,6 +112,26 @@ void WebManager::handleApiGps() {
   _server->sendHeader("Access-Control-Allow-Origin", "*");
   _server->sendHeader("Cache-Control", "no-cache, no-store");
   _server->send(200, "application/json", json);
+}
+
+// =============================================================================
+//  handleApiResetWifi() — clear WiFiManager credentials and restart
+// =============================================================================
+
+void WebManager::handleApiResetWifi() {
+  Serial.println("[Web] /api/reset-wifi called — clearing WiFi settings and restarting.");
+
+  _server->sendHeader("Access-Control-Allow-Origin", "*");
+  _server->sendHeader("Cache-Control", "no-cache, no-store");
+  _server->send(200, "application/json",
+                "{\"status\":\"ok\",\"message\":\"WiFi settings cleared. Rebooting...\"}");
+
+  // Brief delay to allow the HTTP response to be sent before restart
+  delay(500);
+
+  WiFiManager wm;
+  wm.resetSettings();
+  ESP.restart();
 }
 
 // =============================================================================

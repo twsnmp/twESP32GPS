@@ -5,7 +5,8 @@
 #include "ntp.h"
 
 // =============================================================================
-//  Web Server — serves the Svelte dashboard (gzip) and /api/gps JSON endpoint
+//  Web Server — serves the Svelte dashboard (gzip), /api/gps JSON endpoint,
+//  and /api/reset-wifi to clear WiFiManager credentials
 // =============================================================================
 
 class WebManager {
@@ -23,5 +24,6 @@ private:
 
   void handleRoot();
   void handleApiGps();
+  void handleApiResetWifi();
   void handleNotFound();
 };
