@@ -25,6 +25,8 @@ It turns a tiny, low-cost ESP32-S3 board into a **Stratum 1 NTP time server** th
 - **Zero-config WiFi setup** via captive portal on first boot
 - **Bilingual UI** (English / Japanese) switchable from the dashboard
 
+![Web Dashboard](images/dashboard.png)
+
 ---
 
 ## Features
@@ -85,6 +87,10 @@ VK2828U7G5 GPS Module          XIAO ESP32-S3
                                    USB-C
                                  (to PC/power)
 ```
+
+### Wiring Photo
+
+![Wiring Photo](images/wiring.jpg)
 
 > **1PPS Signal**: The PPS pin generates a precise pulse every second at the exact GPS second boundary. The firmware captures this pulse via a hardware interrupt (`RISING` edge on GPIO 2) to discipline the NTP timestamps.
 
