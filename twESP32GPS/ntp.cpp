@@ -50,6 +50,32 @@ void NTPServer::processPacket(const uint8_t* req, size_t /*len*/) {
   uint32_t recvUsec = 0;
   getCurrentTime(recvSec, recvUsec);
 
+  // --- Debug log: print timing info for each NTP request ---
+  {
+    GPSState dbg      = _gps.getState();
+    uint64_t dbgPps   = GPSManager::ppsMicros;
+    uint32_t dbgIntvl = GPSManager::ppsIntervalUs;
+    uint32_t dbgCnt   = GPSManager::ppsCount;
+    uint64_t dbgNow   = (uint64_t)micros();
+    uint32_t dbgElapsed = (uint32_t)(dbgNow - dbgPps);
+    int32_t  dbgDrift   = (dbgIntvl > 0) ? (int32_t)dbgIntvl - 1000000 : 0;
+    Serial.printf(
+      "[NTP] #%lu  NMEA=%s %s  gpsUnixSec=%lu"
+      "  pps#%lu interval=%lu us (drift%+ld us)"
+      "  elapsed=%lu us  recv=%lu.%06lu\n",
+      (unsigned long)_clientCount,
+      dbg.date[0] ? dbg.date : "(no date)",
+      dbg.time[0] ? dbg.time : "(no time)",
+      (unsigned long)recvSec,
+      (unsigned long)dbgCnt,
+      (unsigned long)dbgIntvl,
+      (long)dbgDrift,
+      (unsigned long)dbgElapsed,
+      (unsigned long)recvSec,
+      (unsigned long)recvUsec
+    );
+  }
+
   // --- Parse client version number from Byte 0 ---
   uint8_t liVnMode = req[0];
   uint8_t vn       = (liVnMode >> 3) & 0x07; // Version Number
@@ -60,8 +86,11 @@ void NTPServer::processPacket(const uint8_t* req, size_t /*len*/) {
 
   GPSState state = _gps.getState();
 
-  // Byte 0: LI=0 (no warning), VN=client version, Mode=4 (Server)
-  resp[0] = (uint8_t)((0 << 6) | (vn << 3) | 4);
+  // Byte 0: LI | VN | Mode
+  // LI = 0 (no warning) when GPS-locked, LI = 3 (alarm/unsynchronised) otherwise.
+  // NTP clients will discard stratum-16 or LI=3 servers.
+  uint8_t li = (state.stratum == 1) ? 0 : 3;
+  resp[0] = (uint8_t)((li << 6) | (vn << 3) | 4);
 
   // Byte 1: Stratum
   resp[1] = state.stratum; // 1 = GPS primary, 16 = unsynchronised
@@ -132,62 +161,47 @@ void NTPServer::processPacket(const uint8_t* req, size_t /*len*/) {
   _udp.endPacket();
 }
 
-// =============================================================================
-//  getCurrentTime()
-//  Uses GPS NMEA UTC + 1PPS microsecond offset for sub-millisecond precision
-// =============================================================================
-
 bool NTPServer::getCurrentTime(uint32_t& outSec, uint32_t& outUsec) const {
   GPSState state = _gps.getState();
 
-  if (!state.hasFix || state.date[0] == '\0' || state.time[0] == '\0') {
-    // Fall back to ESP32 system time (millis-based, low accuracy)
+  // If there's no GPS fix or we haven't synced a valid epoch timestamp yet,
+  // fall back to low-accuracy ESP32 system time (based on millis()).
+  if (!state.hasFix || GPSManager::ppsValidUnixSec < 1700000000UL) {
     uint64_t now_ms = millis();
     outSec  = (uint32_t)(now_ms / 1000);
     outUsec = (uint32_t)((now_ms % 1000) * 1000);
     return false;
   }
 
-  // Parse GPS UTC date "YYYY-MM-DD" and time "HH:MM:SS"
-  int year, month, day, hour, minute, second;
-  sscanf(state.date, "%d-%d-%d", &year, &month, &day);
-  sscanf(state.time, "%d:%d:%d", &hour, &minute, &second);
-
-  // Convert GPS UTC to Unix timestamp (simple formula, no leap-second correction)
-  // Days since Unix epoch (1970-01-01)
-  // Use mktime-style calculation
-  int y = year - 1900;
-  int m = month - 1;
-  // Days in each month (non-leap)
-  static const int daysInMonth[] = {31,28,31,30,31,30,31,31,30,31,30,31};
-  long days = (y - 70) * 365 + (y - 69) / 4 - (y - 1) / 100 + (y + 299) / 400;
-  for (int i = 0; i < m; i++) {
-    days += daysInMonth[i];
-    // Leap year correction for Feb
-    if (i == 1 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
-      days += 1;
-    }
+  // Lock-free sequence read to ensure consistency between ppsValidUnixSec and ppsMicros
+  uint32_t count1 = GPSManager::ppsCount;
+  uint32_t sec = GPSManager::ppsValidUnixSec;
+  uint64_t ppsTs = GPSManager::ppsMicros;
+  if (count1 != GPSManager::ppsCount) {
+    sec = GPSManager::ppsValidUnixSec;
+    ppsTs = GPSManager::ppsMicros;
   }
-  days += day - 1;
 
-  uint32_t gpsUnixSec = (uint32_t)(days * 86400L + hour * 3600L + minute * 60L + second);
-
-  // Add 1PPS sub-second offset: elapsed micros since last PPS edge
-  uint64_t ppsTs   = GPSManager::ppsMicros;
-  uint64_t nowUs   = (uint64_t)micros();
+  uint64_t nowUs = (uint64_t)micros();
   uint32_t elapsedUs = (uint32_t)(nowUs - ppsTs);
 
-  // If ppsFlag hasn't been triggered yet (startup), skip offset
   if (!GPSManager::ppsFlag) {
     elapsedUs = 0;
   }
 
-  // If elapsed > 1.5 seconds something is wrong — clamp
-  if (elapsedUs > 1500000) {
-    elapsedUs = 0;
+  // Clock-drift correction using the measured PPS interval.
+  uint32_t interval = GPSManager::ppsIntervalUs;
+  if (interval > 500000UL && interval < 1500000UL && interval != 1000000UL) {
+    elapsedUs = (uint32_t)(((uint64_t)elapsedUs * 1000000ULL) / (uint64_t)interval);
   }
 
-  outSec  = gpsUnixSec;
+  // Wrap elapsedUs if it rolled past 1 second (e.g. if we missed a PPS edge)
+  if (elapsedUs >= 1000000UL) {
+    sec += elapsedUs / 1000000UL;
+    elapsedUs = elapsedUs % 1000000UL;
+  }
+
+  outSec  = sec;
   outUsec = elapsedUs;
 
   return true;

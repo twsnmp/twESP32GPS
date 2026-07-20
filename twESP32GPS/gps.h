@@ -42,15 +42,26 @@ public:
   void begin(HardwareSerial& serial, uint32_t baud, int rxPin, int txPin, int ppsPin);
   void update();           // Call from loop() — feeds GPS serial into TinyGPS++
 
-  // 1PPS ISR — must be declared IRAM_ATTR, called via attachInterrupt
-  static void IRAM_ATTR onPPS();
+  // 1PPS ISR — IRAM_ATTR, registered via gpio_isr_handler_add (ESP-IDF high-priority)
+  // Takes void* arg as required by gpio_isr_handler_add
+  static void IRAM_ATTR onPPS(void* arg);
 
-  // Thread-safe state access (disables interrupts briefly)
+  // Thread-safe state access
   GPSState getState() const;
 
-  // For NTP: returns micros() captured at last 1PPS rising edge
+  // For NTP: timestamp (micros) captured at last 1PPS rising edge
   static volatile uint64_t ppsMicros;
   static volatile bool     ppsFlag;
+
+  // Interval between the two most recent PPS pulses (microseconds).
+  // Ideally exactly 1,000,000 us. Deviation reveals ISR-latency drift.
+  static volatile uint32_t ppsIntervalUs;
+
+  // Total PPS pulses received since boot (for diagnostics)
+  static volatile uint32_t ppsCount;
+
+  // Exact UTC epoch seconds synchronized at 1PPS boundary
+  static volatile uint32_t ppsValidUnixSec;
 
 private:
   TinyGPSPlus  _gps;
@@ -58,6 +69,12 @@ private:
 
   // Internal mutable state (updated from ISR-safe context)
   GPSState     _state;
+
+  // Helper to convert date/time parameters into Unix epoch seconds
+  static uint32_t convertToUnixSec(int year, int month, int day, int hour, int minute, int second);
+
+  // Tracks the last NMEA UTC second synchronized to ppsValidUnixSec
+  uint32_t     _lastSyncedNmeaSec = 0;
 
   // Satellite tracking map (system x prn -> detail), rebuilt per GSV set
   // We use a flat array in _state.satellites for JSON output

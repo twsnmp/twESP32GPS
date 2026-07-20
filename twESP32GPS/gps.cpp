@@ -3,18 +3,56 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+// ESP-IDF GPIO/interrupt APIs for high-priority PPS ISR
+#include "driver/gpio.h"
+#include "esp_intr_alloc.h"
 
 // =============================================================================
 //  Static / ISR variables
 // =============================================================================
 
-volatile uint64_t GPSManager::ppsMicros = 0;
-volatile bool     GPSManager::ppsFlag   = false;
+volatile uint64_t GPSManager::ppsMicros    = 0;
+volatile bool     GPSManager::ppsFlag      = false;
+volatile uint32_t GPSManager::ppsIntervalUs = 0;
+volatile uint32_t GPSManager::ppsCount     = 0;
+volatile uint32_t GPSManager::ppsValidUnixSec = 0;
 
-void IRAM_ATTR GPSManager::onPPS() {
-  GPSManager::ppsMicros = (uint64_t)micros();
+// High-priority ISR registered via gpio_isr_handler_add.
+// Runs at ESP_INTR_FLAG_LEVEL3, above WiFi stack, minimising capture latency.
+void IRAM_ATTR GPSManager::onPPS(void* /*arg*/) {
+  uint64_t now = (uint64_t)micros();
+
+  if (GPSManager::ppsMicros > 0) {
+    uint32_t interval = (uint32_t)(now - GPSManager::ppsMicros);
+
+    // ------------------------------------------------------------------
+    // Debounce: ignore any trigger within 500 ms of the last accepted one.
+    //
+    // GPS PPS pulse width is typically 50-100 ms.  Without debounce the
+    // ISR fires TWICE per second: once on the rising edge (correct) and
+    // once on the falling edge (~80 ms later).  The falling-edge capture
+    // overwrites ppsMicros and shifts every elapsed computation by ~80 ms,
+    // producing a persistent ~-80 ms NTP offset.
+    //
+    // A 500 ms gate passes exactly one capture per GPS second while still
+    // allowing a missed-PPS recovery on the next cycle.
+    // ------------------------------------------------------------------
+    if (interval < 500000UL) {
+      return;  // Too close to previous capture — falling-edge noise, ignore
+    }
+
+    // Valid inter-PPS interval (should be ~1,000,000 us for GPS PPS)
+    if (interval < 1500000UL) {
+      GPSManager::ppsIntervalUs = interval;
+    }
+  }
+
+  GPSManager::ppsMicros = now;
   GPSManager::ppsFlag   = true;
+  GPSManager::ppsCount++;
+  GPSManager::ppsValidUnixSec++;
 }
+
 
 // =============================================================================
 //  Constructor
@@ -24,6 +62,26 @@ GPSManager::GPSManager() {
   memset(&_state, 0, sizeof(_state));
   _state.stratum = 16;
   _gsvSessionCount = 0;
+  _lastSyncedNmeaSec = 0;
+}
+
+// =============================================================================
+//  convertToUnixSec()
+// =============================================================================
+
+uint32_t GPSManager::convertToUnixSec(int year, int month, int day, int hour, int minute, int second) {
+  int y = year - 1900;
+  int m = month - 1;
+  static const int daysInMonth[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+  long days = (y - 70) * 365 + (y - 69) / 4 - (y - 1) / 100 + (y + 299) / 400;
+  for (int i = 0; i < m; i++) {
+    days += daysInMonth[i];
+    if (i == 1 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
+      days += 1;
+    }
+  }
+  days += day - 1;
+  return (uint32_t)(days * 86400L + hour * 3600L + minute * 60L + second);
 }
 
 // =============================================================================
@@ -34,9 +92,40 @@ void GPSManager::begin(HardwareSerial& serial, uint32_t baud, int rxPin, int txP
   _serial = &serial;
   serial.begin(baud, SERIAL_8N1, rxPin, txPin);
 
-  // 1PPS hardware interrupt
-  pinMode(ppsPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(ppsPin), GPSManager::onPPS, RISING);
+  // -------------------------------------------------------------------------
+  // 1PPS high-priority interrupt via ESP-IDF GPIO API
+  //
+  // Arduino's attachInterrupt() runs at a medium priority that can be
+  // preempted by the WiFi stack, causing ISR capture latency of 50-100 ms.
+  //
+  // ESP_INTR_FLAG_LEVEL3 sits above the WiFi interrupt level on ESP32,
+  // reducing capture latency to single-digit microseconds.
+  // ESP_INTR_FLAG_IRAM ensures the handler stays in IRAM and is never
+  // swapped out during flash operations.
+  // -------------------------------------------------------------------------
+  gpio_config_t io_conf = {};
+  io_conf.pin_bit_mask = (1ULL << ppsPin);
+  io_conf.mode         = GPIO_MODE_INPUT;
+  io_conf.pull_up_en   = GPIO_PULLUP_DISABLE;
+  io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  io_conf.intr_type    = GPIO_INTR_POSEDGE;
+  gpio_config(&io_conf);
+
+  // gpio_install_isr_service may already have been called by the Arduino
+  // framework. ESP_ERR_INVALID_STATE is the "already installed" code — safe
+  // to ignore.
+  esp_err_t err = gpio_install_isr_service(
+      ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_LEVEL3);
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+    Serial.printf("[GPS] gpio_install_isr_service failed: 0x%x\n", err);
+  }
+
+  err = gpio_isr_handler_add((gpio_num_t)ppsPin, GPSManager::onPPS, nullptr);
+  if (err != ESP_OK) {
+    Serial.printf("[GPS] gpio_isr_handler_add failed: 0x%x\n", err);
+  } else {
+    Serial.printf("[GPS] PPS ISR registered on GPIO %d (LEVEL3/IRAM)\n", ppsPin);
+  }
 
   Serial.println("[GPS] Initialized. Waiting for NMEA data...");
 }
@@ -93,7 +182,6 @@ void GPSManager::update() {
     _state.numSatellites = (int)_gps.satellites.value();
   }
 
-  // Update time string from TinyGPS++
   if (_gps.time.isValid()) {
     snprintf(_state.time, sizeof(_state.time), "%02d:%02d:%02d",
              _gps.time.hour(), _gps.time.minute(), _gps.time.second());
@@ -101,6 +189,32 @@ void GPSManager::update() {
   if (_gps.date.isValid()) {
     snprintf(_state.date, sizeof(_state.date), "%04d-%02d-%02d",
              _gps.date.year(), _gps.date.month(), _gps.date.day());
+  }
+
+  // Decoupled Time-Discipline Synchronization Logic:
+  // If 1PPS has not fired yet, update ppsValidUnixSec directly.
+  // Once 1PPS is active, update ppsValidUnixSec only within the safe age window (300ms - 700ms)
+  // after the last 1PPS pulse to prevent serial NMEA latency step-errors.
+  if (_gps.time.isValid() && _gps.date.isValid()) {
+    uint32_t nmeaUnixSec = convertToUnixSec(
+      _gps.date.year(), _gps.date.month(), _gps.date.day(),
+      _gps.time.hour(), _gps.time.minute(), _gps.time.second()
+    );
+    if (nmeaUnixSec > 0) {
+      if (!GPSManager::ppsFlag) {
+        GPSManager::ppsValidUnixSec = nmeaUnixSec;
+      } else {
+        uint32_t lastPps = (uint32_t)GPSManager::ppsMicros;
+        uint32_t now = micros();
+        uint32_t elapsedMs = (now - lastPps) / 1000;
+        if (elapsedMs >= 300 && elapsedMs <= 700) {
+          if (_lastSyncedNmeaSec != nmeaUnixSec) {
+            GPSManager::ppsValidUnixSec = nmeaUnixSec;
+            _lastSyncedNmeaSec = nmeaUnixSec;
+          }
+        }
+      }
+    }
   }
 
   _state.uptimeSeconds = millis() / 1000;
