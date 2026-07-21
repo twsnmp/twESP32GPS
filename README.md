@@ -17,6 +17,8 @@ for Seeed Studio XIAO ESP32-S3 + VK2828U7G5 GPS Module
 
 It turns a tiny, low-cost ESP32-S3 board into a **Stratum 1 NTP time server** that is disciplined by a 1PPS (pulse-per-second) hardware interrupt from the GPS module, achieving sub-millisecond timing accuracy. In addition to precise timekeeping, a browser-based dashboard gives you a real-time sky plot of all visible satellites across six GNSS constellations.
 
+![Infographic](images/infographic.jpg)
+
 ### Key Highlights
 
 - **No dedicated GPS server hardware needed** — runs entirely on a compact XIAO ESP32-S3 board
